@@ -42,12 +42,12 @@ Extensibility points: new `SourcePlugin` implementations (Discord, WhatsApp) slo
    @dataclass
    class TradeSignal:
        symbol: str
-       exchange: str           # NSE | BSE
-       amount: float           # ₹ amount, defaults to config
-       tsl_mode: str           # fixed | stepped | atr | chandelier | psar
-       tsl_pct: float | None   # used by fixed mode
-       tsl_tiers: list | None  # used by stepped mode
-       tsl_k: float | None     # used by atr / chandelier
+       exchange: str                # NSE | BSE
+       amount: float | None = None  # ₹ amount; None → use config default
+       tsl_mode: str | None = None  # None → use config default
+       tsl_pct: float | None = None # fixed mode
+       tsl_tiers: list | None = None# stepped mode
+       tsl_k: float | None = None   # atr / chandelier
    ```
    Deduplication: signal dropped if open position already exists for symbol.
 
