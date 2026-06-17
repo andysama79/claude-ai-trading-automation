@@ -1,0 +1,10 @@
+python-telegram-bot>=21.0
+kiteconnect>=4.1.0
+pyotp>=2.9.0
+aiohttp>=3.9.0
+pyyaml>=6.0.0
+python-dotenv>=1.0.0
+yfinance>=0.2.0
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
+aioresponses>=0.7.6

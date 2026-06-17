@@ -1,1 +1,4 @@
 .superpowers/
+.env
+logs/*.jsonl
+.kite_session
