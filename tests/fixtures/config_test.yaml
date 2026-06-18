@@ -1,0 +1,34 @@
+trading:
+  default_amount: 5000
+  exchange: NSE
+  product: CNC
+  dedup_open_positions: true
+
+tsl:
+  default_mode: fixed
+  default_pct: 4.0
+  k: 2.5
+  tiers:
+    - [10, 8.0]
+    - [.inf, 3.0]
+  poll_interval_sec: 5
+
+auth:
+  mode: manual
+  totp_secret_env: KITE_TOTP_SECRET
+
+sources:
+  telegram:
+    api_id_env: TG_API_ID
+    api_hash_env: TG_API_HASH
+    relay_bot_token_env: TG_BOT_TOKEN
+    watch_chats: [-1001234567890]
+    symbol_regex: "\\b([A-Z&]{2,20})\\b"
+
+fundamentals:
+  enabled: false
+  provider: yahoo
+
+log:
+  trade_log: logs/trades.jsonl
+  level: DEBUG
