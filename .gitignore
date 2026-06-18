@@ -2,3 +2,16 @@
 .env
 logs/*.jsonl
 .kite_session
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/

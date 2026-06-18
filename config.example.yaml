@@ -29,7 +29,7 @@ sources:
 
 fundamentals:
   enabled: true
-  provider: yahoo
+  provider: yahoo  # yahoo | none (screener.in not yet implemented)
 
 log:
   trade_log: logs/trades.jsonl
