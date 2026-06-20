@@ -1,0 +1,30 @@
+# fly.toml — Fly.io app configuration
+# Generated for: trader bot
+# Docs: https://fly.io/docs/reference/configuration/
+
+app = "trader"          # change to your unique app name (fly launch sets this)
+primary_region = "bom"  # bom = Mumbai (closest to NSE/BSE); options: sin, hkg, nrt
+
+[build]
+  dockerfile = "Dockerfile"
+
+# Machine size: shared-1x-256mb is the cheapest (~$2/month).
+# Upgrade to shared-2x-512mb if you add more TSL monitors or fundamentals fetching.
+[vm]
+  memory = "256mb"
+  cpu_kind = "shared"
+  cpus = 1
+
+# No HTTP server — this is a background worker, not a web app.
+# Fly needs at least one service or a [processes] block to keep it alive.
+[processes]
+  bot = "python -m trader --config config.yaml"
+
+# Persistent volume mount — stores .kite_session and logs/
+# Create with: fly volumes create trader_data --size 1 --region bom
+[[mounts]]
+  source = "trader_data"
+  destination = "/app/data"
+
+# No health check needed for a background worker with no HTTP port.
+# Fly restarts the machine automatically when the process exits.

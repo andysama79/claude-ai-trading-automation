@@ -1,0 +1,27 @@
+services:
+  trader:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # Reads all KEY=VALUE lines from .env and passes them as env vars.
+    # .env is NOT copied into the image — it's injected at runtime only.
+    env_file: .env
+
+    volumes:
+      # config.yaml: read-only mount — change config without rebuilding image
+      - ./config.yaml:/app/config.yaml:ro
+
+      # Kite session token: persists across restarts so you don't re-auth daily
+      # In totp mode this is auto-refreshed; in manual mode you mount your token here
+      - ./kite_session:/app/.kite_session
+
+      # Trade log: append-only JSONL, persists on host so you keep history
+      - ./logs:/app/logs
+
+    # Restart policy:
+    #   unless-stopped → auto-restart on crash, but NOT if you docker stop it manually
+    #   on-failure     → only restart on non-zero exit
+    restart: unless-stopped
+
+    # Optional: tag for easy identification in docker ps
+    container_name: trader

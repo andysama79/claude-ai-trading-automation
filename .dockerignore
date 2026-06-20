@@ -1,0 +1,37 @@
+# Secrets — NEVER bake into image
+.env
+.kite_session
+
+# Python bytecode — regenerated at runtime
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.coverage
+
+# Virtual environments — image has its own pip install
+.venv/
+venv/
+env/
+
+# Logs — mounted as volume at runtime
+logs/*.jsonl
+
+# Dev tooling
+.git/
+.gitignore
+graphify-out/
+.claude/
+.superpowers/
+
+# Docs / plans — not needed at runtime
+docs/
+
+# Tests — not shipped in production image
+tests/
+pytest.ini
+
+# Editor artifacts
+.DS_Store
+*.swp
+*.swo
