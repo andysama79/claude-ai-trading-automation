@@ -1,0 +1,18 @@
+[Unit]
+Description=Claude AI Trading Automation
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=schecter
+WorkingDirectory=/home/schecter/projects/claude-ai-trading-automation
+EnvironmentFile=/etc/environment
+ExecStart=/home/schecter/projects/claude-ai-trading-automation/.venv/bin/python -m trader --config config.yaml
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
