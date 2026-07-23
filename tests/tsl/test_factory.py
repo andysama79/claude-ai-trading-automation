@@ -153,6 +153,45 @@ class TestFactoryPSARMode:
         assert isinstance(strategy, ParabolicSARTSL)
 
 
+class TestFactorySteppedModeEndToEnd:
+    """Regression test for the SteppedTSL zero-division bug (fixed in stepped.py).
+
+    build_tsl_strategy() constructs SteppedTSL(fill_price=0.0, ...) as a
+    placeholder; only initial_stop() receives the real fill price. Prior to
+    the fix, SteppedTSL._active_pct() divided by the constructor's
+    self.fill_price (permanently 0.0), so calling initial_stop() through the
+    factory-built strategy raised ZeroDivisionError on the very first live
+    tick. Unit tests that construct SteppedTSL directly with a real
+    fill_price never exercised this path — this test goes through the
+    factory exactly as Engine.place_buy() -> build_tsl_strategy() ->
+    initial_stop() does in production.
+    """
+
+    def test_factory_built_stepped_strategy_survives_initial_stop(self):
+        signal = TradeSignal(symbol="SBIN", tsl_mode="stepped")
+        config = {"tiers": [(10, 8.0), (30, 5.0), (60, 3.0), (float("inf"), 2.0)]}
+        strategy = build_tsl_strategy(signal, config)
+        assert isinstance(strategy, SteppedTSL)
+
+        # Real fill price arrives only here, as it does in Engine after a buy fills.
+        stop = strategy.initial_stop(fill_price=2500.0)
+
+        assert stop == pytest.approx(2500.0 * (1 - 8.0 / 100))
+        assert strategy.fill_price == 2500.0
+
+    def test_factory_built_stepped_strategy_tightens_across_ticks(self):
+        """Same object survives multiple update_stop() calls with real gains."""
+        signal = TradeSignal(symbol="SBIN", tsl_mode="stepped")
+        config = {"tiers": [(10, 8.0), (30, 5.0), (60, 3.0), (float("inf"), 2.0)]}
+        strategy = build_tsl_strategy(signal, config)
+
+        stop = strategy.initial_stop(fill_price=100.0)
+        assert stop == 92.0
+
+        stop = strategy.update_stop(current_stop=stop, ltp=115.0, peak=115.0)
+        assert stop == pytest.approx(109.25)
+
+
 class TestFactoryErrorHandling:
     """Test error handling for invalid modes."""
 

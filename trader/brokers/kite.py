@@ -33,6 +33,9 @@ class KiteBroker(BrokerPlugin):
         self.default_amount = default_amount
         self.product = product
         self._kite: KiteConnect | None = None
+        self._instrument_cache: dict[str, list[dict]] = {}
+        self._instrument_cache_at: dict[str, datetime] = {}
+        self._instrument_cache_ttl = timedelta(hours=24)
 
     async def connect(self) -> None:
         """Initialize KiteConnect and authenticate. Call once at startup."""
@@ -44,8 +47,17 @@ class KiteBroker(BrokerPlugin):
 
     def _load_session(self) -> None:
         if not _SESSION_FILE.exists():
-            raise FileNotFoundError(f"No session file at {_SESSION_FILE}. Run auth.py first.")
-        token = _SESSION_FILE.read_text().strip().splitlines()[0]
+            raise FileNotFoundError(
+                f"No session file at {_SESSION_FILE}. "
+                "Run `python -m trader.auth` to generate one before starting the trader."
+            )
+        contents = _SESSION_FILE.read_text().strip()
+        if not contents:
+            raise ValueError(
+                f"{_SESSION_FILE} is empty. "
+                "Run `python -m trader.auth` to generate a fresh session."
+            )
+        token = contents.splitlines()[0]
         self._kite.set_access_token(token)
         logger.info("Kite session loaded from %s", _SESSION_FILE)
 
@@ -157,9 +169,22 @@ class KiteBroker(BrokerPlugin):
         raise TimeoutError(f"Order {order_id} did not fill within 30s")
 
     async def _get_instrument_token(self, symbol: str, exchange: str) -> int:
-        """Look up instrument token for historical data API."""
-        instruments = await asyncio.to_thread(self._kite.instruments, exchange)
-        for i in instruments:
+        """Look up instrument token for historical data API.
+
+        Instrument dumps are cached per-exchange for `_instrument_cache_ttl`
+        (default 24h) since Kite instrument lists change at most daily and
+        this method is called on every get_ohlc() invocation (once per TSL
+        position open for atr/chandelier modes, and on every backtest data
+        pull). Fetching + linearly scanning the full exchange dump per call
+        is an unnecessary HTTP round-trip and rate-limit cost otherwise.
+        """
+        now = datetime.now()
+        cached_at = self._instrument_cache_at.get(exchange)
+        if cached_at is None or now - cached_at > self._instrument_cache_ttl:
+            self._instrument_cache[exchange] = await asyncio.to_thread(self._kite.instruments, exchange)
+            self._instrument_cache_at[exchange] = now
+
+        for i in self._instrument_cache[exchange]:
             if i["tradingsymbol"] == symbol:
                 return i["instrument_token"]
         raise ValueError(f"Instrument not found: {exchange}:{symbol}")
