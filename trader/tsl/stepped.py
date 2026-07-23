@@ -30,6 +30,7 @@ class SteppedTSL(TSLStrategy):
 
     def initial_stop(self, fill_price: float) -> float:
         """Compute stop price at position entry."""
+        self.fill_price = fill_price
         return fill_price * (1 - self._active_pct(fill_price) / 100)
 
     def update_stop(self, current_stop: float, ltp: float, peak: float) -> float:

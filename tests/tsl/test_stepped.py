@@ -69,6 +69,17 @@ class TestSteppedTSLInitialStop:
         stop = tsl.initial_stop(fill_price=200.0)
         assert stop == 184.0
 
+    def test_initial_stop_with_factory_placeholder_fill_price(self, tiers):
+        """build_tsl_strategy() constructs SteppedTSL with fill_price=0.0 as a
+        placeholder, then calls initial_stop() with the real fill price once the
+        buy fills. Must not divide by the placeholder (regression: ZeroDivisionError)."""
+        tsl = SteppedTSL(fill_price=0.0, tiers=tiers)
+        stop = tsl.initial_stop(fill_price=200.0)
+        assert stop == 184.0
+        # Subsequent update_stop calls must gain off the real fill price too.
+        new_stop = tsl.update_stop(current_stop=stop, ltp=230.0, peak=230.0)
+        assert new_stop == 218.5  # 15% gain → 2nd tier 5.0% → 230 × 0.95
+
 
 class TestSteppedTSLUpdateStop:
     """Test update_stop tightens as peak grows through tiers."""
