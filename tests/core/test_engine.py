@@ -215,3 +215,89 @@ async def test_recover_open_positions_skips_already_tracked(tmp_path):
 
         # Monitor should NOT have been created (position was already tracked)
         mock_monitor_cls.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Test 5: Fundamentals persistence — result flows from fetch into TradeRecord
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_fundamentals_result_persisted_onto_trade_record(tmp_path):
+    """_handle_signal's fundamentals fetch result must reach the TradeRecord
+    written by _on_position_exit, not be discarded as {} unconditionally."""
+    position = _make_position("INFY")
+    broker = _make_broker(position)
+    config = _make_config(tmp_path)
+    fake_fundamentals = {"pe_ratio": 25.0, "eps": 4.2}
+
+    with patch("trader.core.engine.build_tsl_strategy") as mock_build, \
+         patch("trader.core.engine.TSLMonitor") as mock_monitor_cls, \
+         patch("trader.core.engine.fetch_fundamentals", new_callable=AsyncMock) as mock_fetch:
+
+        mock_fetch.return_value = fake_fundamentals
+        mock_build.return_value = MagicMock()
+        mock_monitor = MagicMock()
+        mock_monitor.run = AsyncMock()
+        mock_monitor_cls.return_value = mock_monitor
+
+        engine = Engine(broker=broker, config=config)
+        signal = TradeSignal(symbol="INFY", exchange="NSE")
+
+        await engine._handle_signal(signal)
+        await asyncio.sleep(0)  # let the fundamentals task run to completion
+
+        assert engine._fundamentals_cache["INFY"] == fake_fundamentals
+
+        await engine._on_position_exit(position, sell_price=120.0)
+
+        log_file = tmp_path / "trades.jsonl"
+        entry = json.loads(log_file.read_text().strip().splitlines()[0])
+        assert entry["fundamentals"] == fake_fundamentals
+        # Cache entry consumed once written to the trade record.
+        assert "INFY" not in engine._fundamentals_cache
+
+
+@pytest.mark.asyncio
+async def test_fundamentals_disabled_skips_fetch_entirely(tmp_path):
+    """fundamentals.enabled = False must skip fetch_fundamentals, not fetch-then-discard."""
+    position = _make_position("INFY")
+    broker = _make_broker(position)
+    config = _make_config(tmp_path)
+    config.fundamentals.enabled = False
+
+    with patch("trader.core.engine.build_tsl_strategy") as mock_build, \
+         patch("trader.core.engine.TSLMonitor") as mock_monitor_cls, \
+         patch("trader.core.engine.fetch_fundamentals", new_callable=AsyncMock) as mock_fetch:
+
+        mock_build.return_value = MagicMock()
+        mock_monitor = MagicMock()
+        mock_monitor.run = AsyncMock()
+        mock_monitor_cls.return_value = mock_monitor
+
+        engine = Engine(broker=broker, config=config)
+        signal = TradeSignal(symbol="INFY", exchange="NSE")
+
+        await engine._handle_signal(signal)
+        await asyncio.sleep(0)
+
+        mock_fetch.assert_not_awaited()
+        assert "INFY" not in engine._fundamentals_cache
+
+
+@pytest.mark.asyncio
+async def test_trade_record_fundamentals_defaults_empty_when_not_fetched_yet(tmp_path):
+    """If the position exits before the fundamentals task resolves (or it was
+    never scheduled, e.g. in a synthetic/recovered position), the trade
+    record still gets written with fundamentals={} rather than erroring."""
+    broker = _make_broker()
+    config = _make_config(tmp_path)
+    engine = Engine(broker=broker, config=config)
+
+    position = _make_position("TCS")
+    engine._open_positions["TCS"] = position
+
+    await engine._on_position_exit(position, sell_price=120.0)
+
+    log_file = tmp_path / "trades.jsonl"
+    entry = json.loads(log_file.read_text().strip().splitlines()[0])
+    assert entry["fundamentals"] == {}

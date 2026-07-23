@@ -24,6 +24,7 @@ class Engine:
         self.config = config
         self.dispatcher = Dispatcher()
         self._open_positions: dict[str, Position] = {}
+        self._fundamentals_cache: dict[str, dict] = {}
         self._log_path = Path(config.log.trade_log)
         self._log_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -57,10 +58,7 @@ class Engine:
             "k": self.config.tsl.k,
         })
 
-        asyncio.create_task(fetch_fundamentals(
-            signal.symbol, signal.exchange,
-            provider=self.config.fundamentals.provider,
-        ))
+        asyncio.create_task(self._fetch_and_cache_fundamentals(signal.symbol, signal.exchange))
 
         monitor = TSLMonitor(
             position=position,
@@ -71,9 +69,26 @@ class Engine:
         )
         asyncio.create_task(monitor.run())
 
+    async def _fetch_and_cache_fundamentals(self, symbol: str, exchange: str) -> None:
+        """Fire-and-forget fundamentals fetch, cached for the trade log.
+
+        Never blocks the trade path (called via asyncio.create_task, not
+        awaited). Respects fundamentals.enabled: when disabled, skips the
+        network call entirely rather than fetching and discarding. Result is
+        stashed in _fundamentals_cache keyed by symbol so _on_position_exit
+        can attach it to the TradeRecord instead of writing {} unconditionally.
+        Since dedup_open_positions guarantees at most one open position per
+        symbol at a time, keying by symbol alone is safe here.
+        """
+        if not self.config.fundamentals.enabled:
+            return
+        result = await fetch_fundamentals(symbol, exchange, provider=self.config.fundamentals.provider)
+        self._fundamentals_cache[symbol] = result
+
     async def _on_position_exit(self, position: Position, sell_price: float) -> None:
         """Called by TSLMonitor when position closes. Logs trade."""
         self._open_positions.pop(position.symbol, None)
+        fundamentals = self._fundamentals_cache.pop(position.symbol, {})
         pnl = (sell_price - position.fill_price) * position.qty
 
         record = TradeRecord(
@@ -86,7 +101,7 @@ class Engine:
             tsl_mode=self.config.tsl.default_mode,
             opened_at=position.opened_at,
             closed_at=datetime.now(),
-            fundamentals={},
+            fundamentals=fundamentals,
         )
         self._append_trade_log(record)
         logger.info("Trade closed: %s P&L=%.2f", position.symbol, pnl)
