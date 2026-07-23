@@ -4,9 +4,7 @@ Companion to docs/PRD-MVP-backtest-and-live.md. Ordered task list, each item
 sized to land as its own PR against the existing 121-test suite.
 
 ## Phase 0 — Unblock live safety (small, do first)
-Status: DONE. Merged fix/stepped-tsl-zero-division into master (commit
-61f4777) and completed 0.2–0.5 below. 131 tests passing. Fundamentals
-persistence (0.6) is the one item still open.
+Status: DONE, all 6 items. 134 tests passing.
 
 - [x] 0.1 Fix SteppedTSL zero-division (commit 61f4777) — merged to master,
       verified via `python -m pytest`.
@@ -26,9 +24,17 @@ persistence (0.6) is the one item still open.
 - [x] 0.5 Cache KiteBroker._get_instrument_token() (in-memory, 24h TTL,
       per-exchange) — needed before backtest hammers get_ohlc() in a loop.
       Covered by tests/brokers/test_kite.py::TestInstrumentTokenCache.
-- [ ] 0.6 Wire fundamentals fetch result into TradeRecord.fundamentals
-      instead of discarding it (data quality, unblocks fundamentals-aware
-      strategy work later). Not started.
+- [x] 0.6 Wire fundamentals fetch result into TradeRecord.fundamentals
+      instead of discarding it. Engine now caches the fetch result
+      (_fundamentals_cache, keyed by symbol) and _on_position_exit reads it
+      off before writing the trade log — falls back to {} if the fetch
+      hasn't resolved yet (or was never scheduled, e.g. for a recovered
+      position). Also fixed a related bug found while here:
+      fundamentals.enabled was never actually checked — the fetch always
+      fired regardless of config, wasting a yfinance call whose result was
+      then discarded anyway. Now skipped entirely when disabled. Covered by
+      tests/core/test_engine.py (3 new tests: persisted-on-exit,
+      disabled-skips-fetch, defaults-empty-when-not-fetched-yet).
 
 ## Phase 1 — Backtest engine core
 Add trader/backtest/ module. Target: one TSL config, one historical
